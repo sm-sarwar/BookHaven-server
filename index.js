@@ -29,6 +29,25 @@ async function run() {
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
+    // Books category related apis 
+    const booksCategoriesCollection = client.db('BookHaven').collection('BooksCategory');
+    const booksCollection = client.db('BookHaven').collection('Books');
+
+    app.get('/booksCategory',async(req,res)=>{
+        const cursor = booksCategoriesCollection.find()
+        const result = await cursor.toArray();
+        res.send(result);
+    })
+
+
+    app.post('/AddBook',async(req,res)=>{
+        const books = req.body
+        const result = await booksCollection.insertOne(books);
+        res.send(result);
+       })
+
+
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
