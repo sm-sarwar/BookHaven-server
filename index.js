@@ -54,7 +54,14 @@ async function run() {
         const result = await booksCollection.findOne(query);
         res.send(result);
    })
-    
+
+   
+   app.get('/borrowBooks',async(req,res)=>{
+    const email = req.query.email;
+    const query = {userEmail: email}
+    const result = await borrowBooksCollection.find(query).toArray();
+    res.send(result);
+   })
 
 
     app.post('/AddBook',async(req,res)=>{
@@ -69,7 +76,6 @@ async function run() {
         const result = await borrowBooksCollection.insertOne(borrowBooks);
         res.send(result);
        })
-
 
 
   } finally {
