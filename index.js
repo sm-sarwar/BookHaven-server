@@ -60,6 +60,17 @@ async function run() {
     const email = req.query.email;
     const query = {userEmail: email}
     const result = await borrowBooksCollection.find(query).toArray();
+    for(const books of result)
+      {
+        // console.log(application.job_id)
+        const query1 = {_id: new ObjectId(books.bookId)}
+        const book = await booksCollection.findOne(query1);
+        if(book){
+          books.name = book.name;
+          books.category = book.category;
+          books.image = book.image;
+        }
+      }
     res.send(result);
    })
 
