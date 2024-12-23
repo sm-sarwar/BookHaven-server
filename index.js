@@ -33,6 +33,7 @@ async function run() {
     // Books category related apis 
     const booksCategoriesCollection = client.db('BookHaven').collection('BooksCategory');
     const booksCollection = client.db('BookHaven').collection('Books');
+    const borrowBooksCollection = client.db('BookHaven').collection('borrowBooks');
 
     app.get('/booksCategory',async(req,res)=>{
         const cursor = booksCategoriesCollection.find()
@@ -61,6 +62,14 @@ async function run() {
         const result = await booksCollection.insertOne(books);
         res.send(result);
        })
+
+      //  Borrow books related apis 
+      app.post('/borrowBooks',async(req,res)=>{
+        const borrowBooks = req.body
+        const result = await borrowBooksCollection.insertOne(borrowBooks);
+        res.send(result);
+       })
+
 
 
   } finally {
