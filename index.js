@@ -48,6 +48,32 @@ async function run() {
         res.send(result);
     })
 
+    app.get('/book/:id',async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const result = await booksCollection.findOne(query);
+      res.send(result);
+    })
+
+
+    app.put('/book/:id',async(req,res)=>{
+      const id = req.params.id;
+      const book = req.body
+      const filter = {_id: new ObjectId(id)}
+      const options = {upsert:true}
+      const updatedBook = {
+        $set:{
+          name: book.name,
+          category: book.category,
+          image: book.image,
+          author: book.author,
+          rating: book.rating,
+        }
+      }
+      const result = await booksCollection.updateOne(filter,updatedBook,options);
+      res.send(result)
+    })
+
     app.get ('/books/:id', async(req,res)=>{
         const id = req.params.id
         const query = new ObjectId(id);
