@@ -110,9 +110,20 @@ async function run() {
       //  Borrow books related apis 
       app.post('/borrowBooks',async(req,res)=>{
         const borrowBooks = req.body
+        const bookId = borrowBooks.bookId;
+
+        const decrementResult = await booksCollection.updateOne(
+          { _id: new ObjectId(bookId) }, 
+          { $inc: { quantity: -1 } }   
+        ); 
         const result = await borrowBooksCollection.insertOne(borrowBooks);
         res.send(result);
        })
+       res.send({
+        message: "Borrow record added and quantity updated", 
+        borrowResult: result, 
+        decrementResult: decrementResult, 
+      });
 
 
   } finally {
