@@ -119,11 +119,21 @@ async function run() {
         const result = await borrowBooksCollection.insertOne(borrowBooks);
         res.send(result);
        })
-       res.send({
-        message: "Borrow record added and quantity updated", 
-        borrowResult: result, 
-        decrementResult: decrementResult, 
-      });
+      
+
+      app.delete('/book/:id',async(req,res)=>{
+        const id = req.params.id;
+        const query = {_id: new ObjectId(id)}
+
+        const bookId = req.query.bookId;
+
+        const incrementResult = await booksCollection.updateOne(
+          { _id: new ObjectId(bookId) }, 
+          { $inc: { quantity: 1 } }   
+        );
+        const result = await borrowBooksCollection.deleteOne(query);
+        res.send(result);
+      })
 
 
   } finally {
