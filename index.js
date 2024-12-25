@@ -1,14 +1,22 @@
-const express = require('express');
-const cors = require('cors');
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const express = require("express");
+const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
-require('dotenv').config()
+require("dotenv").config();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+
+const corsOptions = {
+  origin: ['http://localhost:5173',],
+  credentials: true,
+  optionalSuccessStatus : 200,
+}
+
+app.use(cors(corsOptions));
 app.use(express.json());
-
-
+app.use(cookieParser());
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.bfkro.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -19,8 +27,24 @@ const client = new MongoClient(uri, {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
 });
+
+
+// verify token
+const verifyToken = (req, res,next) => {
+  const token = req.cookies?.token
+  if (!token) return res.status(401).send({ error: "Unauthorized access" });
+  jwt.verify(token,process.env.SECRET_KEY,(err,decoded)=>{
+    if(err) {
+      return res.status(403).send({ error: "Invalid token" });
+    }
+    req.user = decoded
+  })
+  // console.log(token)
+
+  next()
+}
 
 async function run() {
   try {
@@ -28,114 +52,166 @@ async function run() {
     await client.connect();
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
 
-    // Books category related apis 
-    const booksCategoriesCollection = client.db('BookHaven').collection('BooksCategory');
-    const booksCollection = client.db('BookHaven').collection('Books');
-    const borrowBooksCollection = client.db('BookHaven').collection('borrowBooks');
+    // Books category related apis
+    const booksCategoriesCollection = client
+      .db("BookHaven")
+      .collection("BooksCategory");
+    const booksCollection = client.db("BookHaven").collection("Books");
+    const borrowBooksCollection = client
+      .db("BookHaven")
+      .collection("borrowBooks");
 
-    app.get('/booksCategory',async(req,res)=>{
-        const cursor = booksCategoriesCollection.find()
-        const result = await cursor.toArray();
-        res.send(result);
+
+
+    // jwt authorization
+    app.post("/jwt", async (req, res) => {
+      const email = req.body;
+      const token = jwt.sign(email, process.env.SECRET_KEY, {
+        expiresIn: "365d",
+      });
+      console.log(token);
+      res.cookie('token',token,{
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production'? "none" : "strict",  
+      }).send({success:true});
+    });
+
+    //  token cleanup
+    app.get('/logout', async (req, res) => {
+      res.clearCookie('token',{
+        maxAge:0,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production'? "none" : "strict",  
+      }).send({success:true});
     })
 
 
-    app.get('/books',async(req,res)=>{
-        const cursor = booksCollection.find()
-        const result = await cursor.toArray();
-        res.send(result);
-    })
+    app.get("/booksCategory", async (req, res) => {
+      const cursor = booksCategoriesCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
-    app.get('/book/:id',async(req,res)=>{
+    app.get("/books", async (req, res) => {
+      const cursor = booksCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    
+    // all books
+    app.get("/book/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await booksCollection.findOne(query);
       res.send(result);
-    })
+    });
 
 
-    app.put('/book/:id',async(req,res)=>{
+    // update books
+    app.put("/book/:id", async (req, res) => {
       const id = req.params.id;
-      const book = req.body
-      const filter = {_id: new ObjectId(id)}
-      const options = {upsert:true}
+      const book = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
       const updatedBook = {
-        $set:{
+        $set: {
           name: book.name,
           category: book.category,
           image: book.image,
           author: book.author,
           rating: book.rating,
-        }
-      }
-      const result = await booksCollection.updateOne(filter,updatedBook,options);
-      res.send(result)
-    })
+        },
+      };
+      const result = await booksCollection.updateOne(
+        filter,
+        updatedBook,
+        options
+      );
+      res.send(result);
+    });
 
-    app.get ('/books/:id', async(req,res)=>{
-        const id = req.params.id
-        const query = new ObjectId(id);
-        const result = await booksCollection.findOne(query);
-        res.send(result);
-   })
 
-   
-   app.get('/borrowBooks',async(req,res)=>{
-    const email = req.query.email;
-    const query = {userEmail: email}
-    const result = await borrowBooksCollection.find(query).toArray();
-    for(const books of result)
-      {
-        // console.log(application.job_id)
-        const query1 = {_id: new ObjectId(books.bookId)}
+    app.get("/books/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = new ObjectId(id);
+      const result = await booksCollection.findOne(query);
+      res.send(result);
+    });
+
+    // borrowed pages data
+    app.get("/borrowBooks", verifyToken,async (req, res) => {
+      const decodedEmail = req.user?.email
+      const email = req.query.email;
+      const query = { userEmail: email };
+
+      // console.log('decoded email',decodedEmail);
+      // console.log('email from query',email);
+
+    if(decodedEmail !== email) return res.status(401).send({ error: "Unauthorized access" });
+
+      const result = await borrowBooksCollection.find(query).toArray();
+      for (const books of result) {
+    
+        const query1 = { _id: new ObjectId(books.bookId) };
         const book = await booksCollection.findOne(query1);
-        if(book){
+        if (book) {
           books.name = book.name;
           books.category = book.category;
           books.image = book.image;
         }
       }
-    res.send(result);
-   })
+      res.send(result);
+    });
 
+    app.post("/AddBook", async (req, res) => {
+      const books = req.body;
+      const result = await booksCollection.insertOne(books);
+      res.send(result);
+    });
 
-    app.post('/AddBook',async(req,res)=>{
-        const books = req.body
-        const result = await booksCollection.insertOne(books);
-        res.send(result);
-       })
+    //  Borrow books related apis
+    app.post("/borrowBooks", async (req, res) => {
+      const borrowBooks = req.body;
+      const { bookId, userEmail } = borrowBooks;
 
-      //  Borrow books related apis 
-      app.post('/borrowBooks',async(req,res)=>{
-        const borrowBooks = req.body
-        const bookId = borrowBooks.bookId;
+      const existingBorrow = await borrowBooksCollection.findOne({
+        bookId: bookId,
+        userEmail: userEmail,
+      });
 
-        const decrementResult = await booksCollection.updateOne(
-          { _id: new ObjectId(bookId) }, 
-          { $inc: { quantity: -1 } }   
-        ); 
-        const result = await borrowBooksCollection.insertOne(borrowBooks);
-        res.send(result);
-       })
-      
+      if (existingBorrow) {
+        return res.status(400).send({
+          error:
+            "You have already borrowed this book. Please return it before borrowing again.",
+        });
+      }
 
-      app.delete('/book/:id',async(req,res)=>{
-        const id = req.params.id;
-        const query = {_id: new ObjectId(id)}
+      const decrementResult = await booksCollection.updateOne(
+        { _id: new ObjectId(bookId) },
+        { $inc: { quantity: -1 } }
+      );
+      const result = await borrowBooksCollection.insertOne(borrowBooks);
+      res.send(result);
+    });
 
-        const bookId = req.query.bookId;
+    app.delete("/book/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
 
-        const incrementResult = await booksCollection.updateOne(
-          { _id: new ObjectId(bookId) }, 
-          { $inc: { quantity: 1 } }   
-        );
-        const result = await borrowBooksCollection.deleteOne(query);
-        res.send(result);
-      })
+      const bookId = req.query.bookId;
 
-
+      const incrementResult = await booksCollection.updateOne(
+        { _id: new ObjectId(bookId) },
+        { $inc: { quantity: 1 } }
+      );
+      const result = await borrowBooksCollection.deleteOne(query);
+      res.send(result);
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
@@ -143,11 +219,10 @@ async function run() {
 }
 run().catch(console.dir);
 
-
-app.get('/', (req, res) => {
-    res.send('BookHaven is available');
-})
+app.get("/", (req, res) => {
+  res.send("BookHaven is available");
+});
 
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-  })
+  console.log(`Example app listening on port ${port}`);
+});
