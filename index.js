@@ -9,7 +9,7 @@ const port = process.env.PORT || 5000;
 
 
 const corsOptions = {
-  origin: ['http://localhost:5173',],
+  origin: ['http://localhost:5173','https://book-haven-95434.web.app','https://book-haven-95434.firebaseapp.com'],
   credentials: true,
   optionalSuccessStatus : 200,
 }
@@ -49,9 +49,9 @@ const verifyToken = (req, res,next) => {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
@@ -84,7 +84,7 @@ async function run() {
     //  token cleanup
     app.get('/logout', async (req, res) => {
       res.clearCookie('token',{
-        maxAge:0,
+        httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production'? "none" : "strict",  
       }).send({success:true});
