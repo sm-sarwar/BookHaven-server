@@ -97,9 +97,17 @@ async function run() {
       res.send(result);
     });
 
+
+    // all books
     app.get("/books", async (req, res) => {
-      const cursor = booksCollection.find();
-      const result = await cursor.toArray();
+      const filter = req.query.filter
+      const search = req.query.search
+      let query = {name:{
+        $regex: search,
+        $options: "i"  // 'i' for case insensitive search
+      }}
+      if(filter) query.category = filter
+      const result = await booksCollection.find(query).toArray()
       res.send(result);
     });
     
