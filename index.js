@@ -97,9 +97,13 @@ async function run() {
       res.send(result);
     });
 
+    app.get('/books',async(req, res)=>{
+      const result = await booksCollection.find().toArray()
+      res.send(result);
+    })
 
     // all books
-    app.get("/books", async (req, res) => {
+    app.get("/all-books", async (req, res) => {
       const filter = req.query.filter
       const search = req.query.search
       let query = {name:{
